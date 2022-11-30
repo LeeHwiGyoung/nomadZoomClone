@@ -1,11 +1,11 @@
 const socket  = io();
-
 const room = document.getElementById("room");
 const welcome = document.getElementById("welcome");
 const lobyForm = welcome.querySelector("form");
 
 
-room.hidden = true;
+room.hidden = true; 
+
 let roomName;
 
 function addMessage(message){
@@ -15,7 +15,7 @@ function addMessage(message){
     ul.append(li);
 }
 
-function showRoom(name) {
+function showRoom(name) { 
     welcome.hidden = true;
     room.hidden = false;
     const h3Name = room.querySelector("h3");
@@ -51,14 +51,32 @@ function handleRoomSubmit(event){
     input.value = "";
 }
 
-socket.on("welcome" , (user) => {
+socket.on("welcome" , (user, newCount) => { //server로부터 welcome이란 이벤트를 받았을 때  
+    const h3Name = room.querySelector("h3");
+    h3Name.innerText = `Room : ${roomName} (${newCount})`;
     addMessage(`${user} joined`);
 })
 
-socket.on("bye", (user) => {
+socket.on("bye", (user, newCount) => { //server로부터 bye라는 이벤트를 받았을 때
+    const h3Name = room.querySelector("h3");
+    h3Name.innerText = `Room : ${roomName} (${newCount})`;
     addMessage(`${user} someone left`);
 })
 
-socket.on("send_message" , addMessage);
+socket.on("send_message" , addMessage); //server로부터 send_message를 받았을 때
+
+socket.on("room_change", (rooms) => {
+    const roomList = welcome.querySelector("ul");
+    roomList.innerHTML = "";
+    if(rooms.length === 0){
+        roomList.innerHTML = "";
+        return;
+    }
+    rooms.forEach((room)=> {
+        const li = document.createElement("li");
+        li.innerText = room;
+        roomList.append(li);
+    });
+});
 
 lobyForm.addEventListener("submit", handleRoomSubmit);

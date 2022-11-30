@@ -1,7 +1,7 @@
 import express from "express";
 import http from "http";
-import SocketIO from "socket.io";
-
+import {Server} from "socket.io";
+import { instrument } from "@socket.io/admin-ui";
 
 const app = express();
 
@@ -14,22 +14,56 @@ app.get("/*", (_,res)=>res.redirect("/"));
 const handelListen = () => console.log(`Listening on http://localhost:3000`);
 
 const httpServer = http.createServer(app);
-const wsServer = SocketIO(httpServer);
+const wsServer = new Server(httpServer, {
+    cors: {
+        origin: ["https://admin.socket.io"],
+        credentials: true,
+    },
+});
+instrument(wsServer, {
+    auth : false,
+});
 //socket끼리 소통할 수 있는 그룹이 필요함
+
+function publicRooms() {
+    const {
+        sockets : {
+            adapter : {sids , rooms},
+        },
+    } = wsServer;
+   const publicRooms = [];
+   rooms.forEach((_,key)=> {
+        if(sids.get(key) === undefined){
+            publicRooms.push(key);
+        }
+   })
+   return publicRooms;
+}
+
+function countRoom(roomName){
+    return wsServer.sockets.adapter.rooms.get(roomName)?.size;
+}
 
 wsServer.on("connection" , (socket) => {
     socket["nickname"] = "Anon"; //socket의 기본 nickname
     socket.onAny((event)=>{  //front로부터 받은 이벤트 확인
         console.log(`socket Evenet : ${event}`) // event 확인
+      
     })
     socket.on("enter_room", (roomName , enter)=> { //enter_room이란 이벤트를 받으면
         socket.join(roomName); //roomName을 가진 room에 참여
         enter(); //backend에서 실행해주는 function
-        socket.to(roomName).emit("welcome" , socket.nickname); //front로 welcome이란 이벤트를 보냄
+        socket.to(roomName).emit("welcome" , socket.nickname , countRoom(roomName)); //front로 welcome이란 이벤트를 보냄
+        wsServer.sockets.emit("room_change", publicRooms());
     });
     socket.on("disconnecting", () => { //disconnceting이란 이벤트를 받으면
-        socket.rooms.forEach((room)=> socket.to(room).emit("bye" , socket.nickname)); //socket이 참여한 모든 방에 다가  bye이벤트를 보냄
+        socket.rooms.forEach((room)=> 
+            socket.to(room).emit("bye" , socket.nickname, countRoom(room) - 1)); //socket이 참여한 모든 방에 다가  bye이벤트를 보냄
         //socket이 중복을 허용하지 않는 Array인 자료구조 Set을 사용하기 때문
+    })
+
+    socket.on("disconnect", () => {
+        wsServer.sockets.emit("room_change", publicRooms());
     })
 
     socket.on("send_message" , (msg, roomName, done) => { //send_message 이벤트를 받으면 
