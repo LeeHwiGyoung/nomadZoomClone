@@ -1,18 +1,64 @@
 const socket  = io();
 
+const room = document.getElementById("room");
 const welcome = document.getElementById("welcome");
-const form = welcome.querySelector("form");
+const lobyForm = welcome.querySelector("form");
 
-function backDone(msg) {
-    console.log(`backEnd Done : ${msg}` );
+
+room.hidden = true;
+let roomName;
+
+function addMessage(message){
+    const ul = room.querySelector("ul");
+    const li = document.createElement("li");
+    li.innerText = message;
+    ul.append(li);
 }
-function handleRoomSubmit(event){
+
+function showRoom(name) {
+    welcome.hidden = true;
+    room.hidden = false;
+    const h3Name = room.querySelector("h3");
+    h3Name.innerText = `Room : ${roomName}`;
+    const roomForm  = room.querySelector("#msg");
+    const nickForm = room.querySelector("#nick");
+    nickForm.addEventListener("submit", handleNickSubmit);
+    roomForm.addEventListener("submit", handleMessageSubmit);
+}
+
+function handleNickSubmit(evnet) {
+    evnet.preventDefault();
+    const input = room.querySelector("#nick input")
+    socket.emit("nickname", input.value);
+}
+ 
+function handleMessageSubmit(event) {
     event.preventDefault();
-    const input = form.querySelector("input");
-    socket.emit("enter_room", input.value, backDone) //어떤 event도 전송 가능 , Javasciprt object도 보낼 수 있음 , callback이 가능
-    //callback은 server로부터 실행되는 함수
+    const input = room.querySelector("#msg input");
+    const value = input.value;
+    socket.emit("send_message" , input.value , roomName , () => {
+        addMessage(`You : ${value}`);
+    });
     input.value = "";
 }
 
+function handleRoomSubmit(event){
+    event.preventDefault();
+    const input = lobyForm.querySelector("input");
+    socket.emit("enter_room", input.value, showRoom); //어떤 event도 전송 가능 , Javasciprt object도 보낼 수 있음 , callback이 가능
+    //callback은 server로부터 실행되는 함수
+    roomName = input.value;
+    input.value = "";
+}
 
-form.addEventListener("submit", handleRoomSubmit);
+socket.on("welcome" , (user) => {
+    addMessage(`${user} joined`);
+})
+
+socket.on("bye", (user) => {
+    addMessage(`${user} someone left`);
+})
+
+socket.on("send_message" , addMessage);
+
+lobyForm.addEventListener("submit", handleRoomSubmit);
